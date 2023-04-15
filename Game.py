@@ -1,3 +1,4 @@
+from sqlite3 import DateFromTicks
 import arcade
 import math
 
@@ -23,6 +24,26 @@ RENDER_UPDATE = 0.017
 
 PROGRESS_BARS_UPDATE = 50
 
+
+
+class ProgressBar:
+    def __init__(self, time):
+        self.cons = 100
+        self.widthIncreaseIteration = int(time / RENDER_UPDATE / self.cons  / 2)
+        self.iterations = 0
+        self.sprite = arcade.Sprite("assets/sprites/ProgressBarElement.png")
+        self.sprite.width = 0.1
+        self.sprite.center_x = 0
+        self.sprite.center_y = 0
+        self.scale = SCREEN_WIDTH / self.cons
+     
+    def update(self):
+        self.iterations += 1
+        self.sprite.width = (self.iterations // self.widthIncreaseIteration + 0.1) * self.scale
+
+    def draw(self):
+        self.sprite.draw()
+
 class TempSprite:   #Class of temporal sprites that will show on the screen for some ticks
     def __init__(self, name, pos_x, pos_y):
         self.sprite = arcade.Sprite("assets/sprites/" + name + ".png")  #Sprite for remporal sprite
@@ -43,16 +64,11 @@ class TempSprite:   #Class of temporal sprites that will show on the screen for 
 
 class Lines:    #Class of lines where notes will be placed
     def __init__(self):
-        self.lines = []
-        for i in range(6):  #We need 6 lines
-            self.lines.append(arcade.SpriteList())
+        self.lines = [[],[],[],[],[],[]]
         self.speed = NOTES_SPEED    #Speed of notes
 
-    def add(self,note): #note contains [line_number, sprite]
-        sprite = note[1]    #Creating sprite for note and place it in line
-        sprite.center_y = SCREEN_HEIGHT
-        sprite.center_x = LINES_X[note[0] - 1]
-        self.lines[note[0] - 1].append(sprite)
+    def add(self,note): #Adding note to line
+        self.lines[note.line].append(note)
 
     def update(self):   #Updating notes in lines and checking if some note passed down bordew
         missedLines = []
@@ -62,8 +78,8 @@ class Lines:    #Class of lines where notes will be placed
                 continue
             
             for j in range(l):
-                self.lines[i][j].center_y -= self.speed
-                if self.lines[i][j].center_y <= DOWN_BORDER:    #If note passed down border then add line's id to missedLines and deleting note
+                result = self.lines[i][j].update()
+                if result == 1:    #If note passed down border then add line's id to missedLines and deleting note
                     missedLines.append(i)
                     self.pop(i)
                     j -= 1
@@ -72,7 +88,8 @@ class Lines:    #Class of lines where notes will be placed
 
     def draw(self): #Drawing lines
         for line in self.lines:
-            line.draw()
+            for note in line:
+                note.draw()
 
     def get_line_element(self, id):
         if len(self.lines[id]) == 0:
@@ -84,12 +101,36 @@ class Lines:    #Class of lines where notes will be placed
         if len(self.lines[id]) != 0:
             self.lines[id].pop(0)
 
+
+class Note:
+    def __init__(self, line,name, sprites):
+        self.line = line
+        self.name = name
+        self.sprites = sprites
+        for sprite in self.sprites:
+            sprite.center_x = LINES_X[line]
+            sprite.center_y = SCREEN_HEIGHT
+
+    def update(self):
+        for sprite in self.sprites:
+            sprite.center_y -= NOTES_SPEED
+
+        if self.sprites[0].center_y <= DOWN_BORDER:
+            return 1
+        return 0
+
+    def draw(self):
+        self.sprites.draw()
+
+
+
 class Scene:    #There all visual parts are placed
     def __init__(self):
         self.loadedSprites = None
         self.lines = Lines()    #Defining lines
         self.score = GameScore() #Defining score (ik it is wrong from architecture perspective, but it makes everething easiear)
         self.tempSprites = []   #Defining list of temporal sprites
+        self.progressBar = None
 
     def change(self, new_scene):    #Changing scene to new with new_scene name
         self.loadedSprites = arcade.SpriteList()
@@ -128,6 +169,8 @@ class Scene:    #There all visual parts are placed
             self.score.draw()
             for sprite in self.tempSprites:
                 sprite.draw()
+            if self.progressBar:
+                self.progressBar.draw()
             arcade.finish_render()
         
 
@@ -143,6 +186,8 @@ class Scene:    #There all visual parts are placed
                 self.tempSprites.pop(i)
                 i-=1
             i += 1
+        if self.progressBar:
+            self.progressBar.update()
 
 
     def circle_press(self, id): #If circle has been pressed, this function called with id of the circle as argument
@@ -171,16 +216,24 @@ class Scene:    #There all visual parts are placed
 
 
 
-class Note: #Note data class
-    def __init__(self, time, typ, line):    #Note has it's time when it spawns, it's type and line where the note should be spawned
+class NoteData: #Note data class
+    def __init__(self, time, line, duration = None):    #Note has it's time when it spawns, it's type and line where the note should be spawned
         self.time = time
-        self.type = typ
+        if duration != None:
+            self.type = "Long"
+            self.duration = duration
+        else:
+            self.type = "Simple"
         self.line = line
 
     def get_if_ready(self, time):   #Checking if the note is reandy. If ready, returns line, where the note should be spawned, and sprite of the note
         if self.time <= time:
-            sprite = arcade.Sprite("assets/sprites/" + self.type + ".png")
-            return [self.line, sprite]
+            sprites = arcade.SpriteList()
+            sprites.append(arcade.Sprite("assets/sprites/" + self.type + ".png"))
+            if self.type == "Simple":
+                return Note(self.line, self.type, sprites)
+            #else:
+            #    return [self.line,Note(self.type, sprite), self.duration]
         else:
             return 0
 
@@ -200,7 +253,7 @@ class Player:
         self.state = None
         self.soundtracks = None
         self.timer = None
-        self.notes = []
+        self.notesData = []
 
     def load_soundtracks(self):
         self.soundtracks = []
@@ -239,25 +292,25 @@ class Player:
             while True:                
                 temp = f.readline()
                 temp = temp.split()
-                if len(temp) != 3:
+                if len(temp) > 4 or len(temp) < 3:
                     return
                 
                 time = float(temp[0]) - cons_time
                 typ = temp[1]
                 line = int(temp[2])
-                if time == '' or typ == '' or line == '':
-                    break
-                temp = Note(time,typ,line)
-                self.notes.append(temp)
+                duration = None
+                if typ == "Long":
+                    duration = temp[3]
+                self.notesData.append(NoteData(time, line, duration))
 
     def get_avaible_notes(self):
         returningNotes = []
         while True:
-            if len(self.notes) != 0:
-                temp = self.notes[0].get_if_ready(self.playingTime)
+            if len(self.notesData) != 0:
+                temp = self.notesData[0].get_if_ready(self.playingTime)
                 if temp != 0:
                     returningNotes.append(temp)
-                    self.notes.pop(0)
+                    self.notesData.pop(0)
                 else:
                     return returningNotes
             else:
@@ -334,6 +387,7 @@ class Game(arcade.Window):
         sound.play()
         self.player.load_to_game(name, 3)
         self.scene.change(self.player.name)
+        self.scene.progressBar = ProgressBar(self.player.len)
         self.gameState = "Playing"
 
     def load(self):
@@ -345,6 +399,7 @@ class Game(arcade.Window):
         self.gameState = "MainMenu"
 
     def on_key_press(self, key: int, modifiers: int):
+        print(key)
         if key == arcade.key.Z:
             self.scene.circle_press(0)
         elif key == arcade.key.X:
