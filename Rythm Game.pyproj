@@ -5,13 +5,14 @@
     <ProjectGuid>90faf838-4802-4f14-b4d6-f73b2f3761d9</ProjectGuid>
     <ProjectHome>
     </ProjectHome>
-    <StartupFile>Rythm Game.py.pyw</StartupFile>
+    <StartupFile>Game.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
     <Name>Rythm Game</Name>
     <RootNamespace>PythonApplication1</RootNamespace>
+    <IsWindowsApplication>False</IsWindowsApplication>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -22,7 +23,11 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Rythm Game.py.pyw" />
+    <Compile Include="Game.py" />
+    <Compile Include="Notes.py" />
+    <Compile Include="Player.py" />
+    <Compile Include="Redactor.py" />
+    <Compile Include="Scene.py" />
     <Compile Include="Settings.py" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
